@@ -1,9 +1,9 @@
 name: Update ETF dividend data
 on:
   schedule:
-    - cron: '20 1 * * *'
-    - cron: '20 7 * * *'
-    - cron: '20 12 * * *'
+    - cron: "20 1 * * *"
+    - cron: "20 7 * * *"
+    - cron: "20 12 * * *"
   workflow_dispatch:
 permissions:
   contents: write
@@ -14,13 +14,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
       - name: Download TWSE ETF distribution data
-        run: python scripts/update_dividends.py
+        run: python update_dividends.py
       - name: Commit changed data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/dividends.json
+          git add dividends.json
           git diff --cached --quiet || git commit -m "Update ETF dividend data"
           git push
