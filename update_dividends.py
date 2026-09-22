@@ -7,9 +7,12 @@ req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0","Accept":"app
 with urllib.request.urlopen(req,timeout=30) as r: obj=json.load(r)
 def clean(v): return re.sub(r"<[^>]+>","",str(v)).strip()
 def date(v):
- s=clean(v).replace("/","-"); p=s.split("-")
- if len(p)==3 and p[0].isdigit() and int(p[0])<1911: p[0]=str(int(p[0])+1911)
- return "-".join(p)
+ m=re.fullmatch(r"(\d{2,4})[年/.-](\d{1,2})[月/.-](\d{1,2})日?",clean(v))
+ if not m: return ""
+ y,month,day=map(int,m.groups())
+ if y<1911: y+=1911
+ try: return datetime.date(y,month,day).isoformat()
+ except ValueError: return ""
 items=[]
 for row in obj.get("data",[]):
  if len(row)<6: continue
@@ -17,7 +20,18 @@ for row in obj.get("data",[]):
  except: continue
  ticker,name,ex,pay=clean(row[0]),clean(row[1]),date(row[2]),date(row[4])
  if ticker and ex and pay: items.append({"ticker":ticker,"name":name,"exDate":ex,"payDate":pay,"dividend":amount})
+if not items: raise ValueError("No valid records; existing data preserved")
+# Retain historical announcements outside the rolling query window.
+path=pathlib.Path("dividends.json")
+merged={}
+if path.exists():
+ for item in json.loads(path.read_text(encoding="utf-8")).get("items",[]):
+  item={**item,"exDate":date(item.get("exDate")),"payDate":date(item.get("payDate"))}
+  if item["exDate"] and item["payDate"]: merged[(item["ticker"],item["exDate"],item["payDate"])]=item
+for item in items: merged[(item["ticker"],item["exDate"],item["payDate"])]=item
+items=list(merged.values())
 items.sort(key=lambda x:(x["exDate"],x["ticker"]))
 payload={"source":"TWSE ETF e添富","updatedAt":datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8))).isoformat(timespec="minutes"),"items":items}
-pathlib.Path("dividends.json").write_text(json.dumps(payload,ensure_ascii=False,separators=(",",":")),encoding="utf-8")
+path.with_suffix(".tmp").write_text(json.dumps(payload,ensure_ascii=False,separators=(",",":")),encoding="utf-8")
+path.with_suffix(".tmp").replace(path)
 print("Updated",len(items),"records")
